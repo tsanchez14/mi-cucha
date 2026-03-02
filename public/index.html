@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veterasky - Sistema de Gestión Veterinaria</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <i class="fas fa-paw logo-icon"></i>
+                <span class="logo-text">vatera<span>sky</span></span>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" data-module="dashboard">
+                    <i class="fas fa-th-large"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#appointments" class="nav-item" data-module="appointments">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Calendario</span>
+                </a>
+                <a href="#pets" class="nav-item" data-module="pets">
+                    <i class="fas fa-dog"></i>
+                    <span>Mascotas y Dueños</span>
+                </a>
+                <a href="#stock" class="nav-item" data-module="stock">
+                    <i class="fas fa-boxes"></i>
+                    <span>Stock</span>
+                </a>
+                <a href="#suppliers" class="nav-item" data-module="suppliers">
+                    <i class="fas fa-truck-moving"></i>
+                    <span>Proveedores</span>
+                </a>
+                <a href="#sales" class="nav-item" data-module="sales">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Ventas</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="avatar">AD</div>
+                    <div class="user-info">
+                        <span class="user-name">Admin Vet</span>
+                        <span class="user-role">Administrador</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Buscar pacientes, dueños o productos...">
+                </div>
+                <div class="top-bar-actions">
+                    <button class="btn-icon"><i class="fas fa-bell"></i><span class="badge"></span></button>
+                    <button class="btn-icon"><i class="fas fa-cog"></i></button>
+                </div>
+            </header>
+
+            <div id="module-container" class="module-content">
+                <!-- Content will be injected here by app.js -->
+                <div class="loader-container">
+                    <div class="loader"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js" type="module"></script>
+</body>
+</html>
