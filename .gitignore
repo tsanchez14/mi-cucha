@@ -1,0 +1,5 @@
+node_modules
+.env
+veterinary.db
+*.db-journal
+test-supabase.js

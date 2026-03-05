@@ -1,8 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const { db, initDb } = require('./database');
+const supabase = require('./supabase');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,378 +12,440 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Initialize Database
-initDb();
-
-// Add missing columns if they don't exist (Migration)
-db.serialize(() => {
-    db.run("ALTER TABLE appointments ADD COLUMN display_name TEXT", (err) => { });
-    db.run("ALTER TABLE appointments ADD COLUMN phone TEXT", (err) => { });
-    db.run("ALTER TABLE sales ADD COLUMN description TEXT", (err) => { });
-    db.run("ALTER TABLE sales ADD COLUMN category_id INTEGER", (err) => { });
-    db.run("ALTER TABLE sales ADD COLUMN notes TEXT", (err) => { });
-});
-
 // --- API Routes ---
 
 // Appointments
-app.get('/api/appointments', (req, res) => {
+app.get('/api/appointments', async (req, res) => {
     const { date } = req.query;
-    let query = `
-        SELECT 
-            a.*, 
-            COALESCE(p.name, a.display_name) as pet_name,
-            COALESCE(o.name, '') as owner_name, 
-            v.name as vet_name 
-        FROM appointments a
-        LEFT JOIN pets p ON a.pet_id = p.id
-        LEFT JOIN owners o ON p.owner_id = o.id
-        LEFT JOIN vets v ON a.vet_id = v.id
-    `;
-    let params = [];
+
+    let query = supabase
+        .from('appointments')
+        .select(`
+            *,
+            pet:pets(name),
+            vet:vets(name),
+            owner:pets(owner:owners(name))
+        `);
+
     if (date) {
-        query += ` WHERE a.date = ?`;
-        params.push(date);
+        query = query.eq('date', date);
     }
-    query += ` ORDER BY a.time ASC`;
 
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+    query = query.order('time', { ascending: true });
+
+    const { data, error } = await query;
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Flatten/Adapt the structure to match what frontend expects
+    const formatted = data.map(a => ({
+        ...a,
+        pet_name: a.pet?.name || a.display_name,
+        vet_name: a.vet?.name || '',
+        owner_name: a.pet?.owner?.name || ''
+    }));
+
+    res.json(formatted);
 });
 
-app.post('/api/appointments', (req, res) => {
+app.post('/api/appointments', async (req, res) => {
     const { pet_id, vet_id, display_name, phone, date, time, reason } = req.body;
-    db.run(`INSERT INTO appointments (pet_id, vet_id, display_name, phone, date, time, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-        [pet_id || null, vet_id || null, display_name, phone, date, time, reason],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID });
-        }
-    );
+    const { data, error } = await supabase
+        .from('appointments')
+        .insert([{
+            pet_id: pet_id || null,
+            vet_id: vet_id || null,
+            display_name,
+            phone,
+            date,
+            time,
+            reason,
+            status: 'pending'
+        }])
+        .select();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ id: data[0].id });
 });
 
-app.patch('/api/appointments/:id/status', (req, res) => {
+app.patch('/api/appointments/:id/status', async (req, res) => {
     const { status } = req.body;
-    db.run(`UPDATE appointments SET status = ? WHERE id = ?`, [status, req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ updated: this.changes });
-    });
+    const { data, error } = await supabase
+        .from('appointments')
+        .update({ status })
+        .eq('id', req.params.id)
+        .select();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ updated: data.length });
 });
 
-app.get('/api/vets', (req, res) => {
-    db.all(`SELECT * FROM vets`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/vets', async (req, res) => {
+    const { data, error } = await supabase
+        .from('vets')
+        .select('*');
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
 });
 
 // Products & Stock
-app.get('/api/products', (req, res) => {
-    db.all(`SELECT * FROM products`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/products', async (req, res) => {
+    const { data, error } = await supabase
+        .from('products')
+        .select('*');
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
 });
 
-app.get('/api/products/low-stock', (req, res) => {
-    db.all(`SELECT * FROM products WHERE stock <= min_stock`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/products/low-stock', async (req, res) => {
+    const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .lte('stock', supabase.raw('min_stock'));
+    // Note: lte with column comparison might need a different approach in supabase-js or just fetch and filter
+    // Alternative:
+    const { data: allProducts, error: err } = await supabase.from('products').select('*');
+    if (err) return res.status(500).json({ error: err.message });
+    const lowStock = allProducts.filter(p => p.stock <= p.min_stock);
+    res.json(lowStock);
 });
 
-app.post('/api/products', (req, res) => {
+app.post('/api/products', async (req, res) => {
     const { name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id } = req.body;
-    db.run(`INSERT INTO products (name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID });
-        }
-    );
+    const { data, error } = await supabase
+        .from('products')
+        .insert([{ name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id }])
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ id: data[0].id });
 });
 
-app.put('/api/products/:id', (req, res) => {
+app.put('/api/products/:id', async (req, res) => {
     const { name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id } = req.body;
-    db.run(`UPDATE products SET name=?, category=?, stock=?, unit=?, cost_price=?, sell_price=?, min_stock=?, supplier_id=? WHERE id=?`,
-        [name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id, req.params.id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ updated: this.changes });
-        }
-    );
+    const { data, error } = await supabase
+        .from('products')
+        .update({ name, category, stock, unit, cost_price, sell_price, min_stock, supplier_id })
+        .eq('id', req.params.id)
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ updated: data.length });
 });
 
-app.patch('/api/products/:id', (req, res) => {
-    const fields = Object.keys(req.body);
-    const values = Object.values(req.body);
-    if (fields.length === 0) return res.status(400).json({ error: "No fields to update" });
-
-    const setClause = fields.map(f => `${f}=?`).join(', ');
-    db.run(`UPDATE products SET ${setClause} WHERE id=?`, [...values, req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ updated: this.changes });
-    });
+app.patch('/api/products/:id', async (req, res) => {
+    const { data, error } = await supabase
+        .from('products')
+        .update(req.body)
+        .eq('id', req.params.id)
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ updated: data.length });
 });
 
-app.delete('/api/products/:id', (req, res) => {
-    db.run(`DELETE FROM products WHERE id=?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ deleted: this.changes });
-    });
+app.delete('/api/products/:id', async (req, res) => {
+    const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ deleted: 1 });
 });
 
 // Suppliers
-app.get('/api/suppliers', (req, res) => {
-    db.all(`SELECT * FROM suppliers`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/suppliers', async (req, res) => {
+    const { data, error } = await supabase.from('suppliers').select('*');
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
 });
 
-app.post('/api/suppliers', (req, res) => {
+app.post('/api/suppliers', async (req, res) => {
     const { name, contact, phone, email, products } = req.body;
-    db.run(`INSERT INTO suppliers (name, contact, phone, email, products) VALUES (?, ?, ?, ?, ?)`,
-        [name, contact, phone, email, products],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID });
-        }
-    );
+    const { data, error } = await supabase
+        .from('suppliers')
+        .insert([{ name, contact, phone, email, products }])
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ id: data[0].id });
 });
 
-app.put('/api/suppliers/:id', (req, res) => {
+app.put('/api/suppliers/:id', async (req, res) => {
     const { name, contact, phone, email, products } = req.body;
-    db.run(`UPDATE suppliers SET name=?, contact=?, phone=?, email=?, products=? WHERE id=?`,
-        [name, contact, phone, email, products, req.params.id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ updated: this.changes });
-        }
-    );
+    const { data, error } = await supabase
+        .from('suppliers')
+        .update({ name, contact, phone, email, products })
+        .eq('id', req.params.id)
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ updated: data.length });
 });
 
-app.delete('/api/suppliers/:id', (req, res) => {
-    db.run(`DELETE FROM suppliers WHERE id=?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ deleted: this.changes });
-    });
+app.delete('/api/suppliers/:id', async (req, res) => {
+    const { error } = await supabase.from('suppliers').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ deleted: 1 });
 });
 
 // Sales Categories (Synced with Stock) - v2
-app.get('/api/v2/sales-categories', (req, res) => {
-    console.log("Hitting /api/v2/sales-categories");
-    const query = `SELECT DISTINCT category as name FROM products WHERE category IS NOT NULL AND category != ''`;
-    db.all(query, [], (err, rows) => {
-        if (err) {
-            console.error("DB Error fetching categories:", err);
-            return res.status(500).json({ error: err.message });
-        }
-        console.log("Found categories in products:", rows.length);
-        const categories = rows.map((r, index) => ({ id: index + 1, name: r.name }));
-        if (categories.length === 0) {
-            return res.json([{ id: 1, name: 'Venta General' }]);
-        }
-        res.json(categories);
-    });
+app.get('/api/v2/sales-categories', async (req, res) => {
+    const { data, error } = await supabase
+        .from('products')
+        .select('category')
+        .not('category', 'is', null)
+        .neq('category', '');
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const uniqueCategories = [...new Set(data.map(r => r.category))];
+    const categories = uniqueCategories.map((name, index) => ({ id: index + 1, name }));
+
+    if (categories.length === 0) {
+        return res.json([{ id: 1, name: 'Venta General' }]);
+    }
+    res.json(categories);
 });
 
-app.post('/api/sales/categories', (req, res) => {
+app.post('/api/sales/categories', async (req, res) => {
     const { name } = req.body;
-    db.run(`INSERT INTO sales_categories (name) VALUES (?)`, [name], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: this.lastID });
-    });
+    const { data, error } = await supabase
+        .from('sales_categories')
+        .insert([{ name }])
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ id: data[0].id });
 });
 
 // Costs
-app.get('/api/costs', (req, res) => {
+app.get('/api/costs', async (req, res) => {
     const { month, year } = req.query;
-    let query = `SELECT * FROM costs`;
-    let params = [];
+    let query = supabase.from('costs').select('*');
+
     if (month && year) {
-        query += ` WHERE strftime('%m', date) = ? AND strftime('%Y', date) = ?`;
-        params.push(month.padStart(2, '0'));
-        params.push(year);
+        // PostgreSQL uses different date functions. 
+        // We can use ILIKE or TO_CHAR if needed, but simple filtering is better if stored as DATE
+        const startDate = `${year}-${month.padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${month.padStart(2, '0')}-${lastDay}`;
+
+        query = query.gte('date', startDate).lte('date', endDate);
     }
-    query += ` ORDER BY date DESC`;
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+
+    query = query.order('date', { ascending: false });
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
 });
 
-app.post('/api/costs', (req, res) => {
+app.post('/api/costs', async (req, res) => {
     const { date, description, type, category, amount, frequency, supplier, is_recurring, notes } = req.body;
-    db.run(`INSERT INTO costs (date, description, type, category, amount, frequency, supplier, is_recurring, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [date, description, type, category, amount, frequency, supplier, is_recurring ? 1 : 0, notes],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID });
-        }
-    );
+    const { data, error } = await supabase
+        .from('costs')
+        .insert([{ date, description, type, category, amount, frequency, supplier, is_recurring: is_recurring ? 1 : 0, notes }])
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ id: data[0].id });
 });
 
-app.put('/api/costs/:id', (req, res) => {
+app.put('/api/costs/:id', async (req, res) => {
     const { date, description, type, category, amount, frequency, supplier, is_recurring, notes } = req.body;
-    db.run(`UPDATE costs SET date=?, description=?, type=?, category=?, amount=?, frequency=?, supplier=?, is_recurring=?, notes=? WHERE id=?`,
-        [date, description, type, category, amount, frequency, supplier, is_recurring ? 1 : 0, notes, req.params.id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ updated: this.changes });
-        }
-    );
+    const { data, error } = await supabase
+        .from('costs')
+        .update({ date, description, type, category, amount, frequency, supplier, is_recurring: is_recurring ? 1 : 0, notes })
+        .eq('id', req.params.id)
+        .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ updated: data.length });
 });
 
-app.delete('/api/costs/:id', (req, res) => {
-    db.run(`DELETE FROM costs WHERE id=?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ deleted: this.changes });
-    });
+app.delete('/api/costs/:id', async (req, res) => {
+    const { error } = await supabase.from('costs').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ deleted: 1 });
 });
 
 // Sales
-app.get('/api/sales', (req, res) => {
+app.get('/api/sales', async (req, res) => {
     const { month, year } = req.query;
-    let query = `
-        SELECT s.*, c.name as category_name, o.name as client_name
-        FROM sales s
-        LEFT JOIN sales_categories c ON s.category_id = c.id
-        LEFT JOIN owners o ON s.owner_id = o.id
-    `;
-    let params = [];
+    let query = supabase
+        .from('sales')
+        .select(`
+            *,
+            category:sales_categories(name),
+            owner:owners(name)
+        `);
+
     if (month && year) {
-        query += ` WHERE strftime('%m', s.date) = ? AND strftime('%Y', s.date) = ?`;
-        params.push(month.padStart(2, '0'));
-        params.push(year);
+        const startDate = `${year}-${month.padStart(2, '0')}-01T00:00:00`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${month.padStart(2, '0')}-${lastDay}T23:59:59`;
+        query = query.gte('date', startDate).lte('date', endDate);
     }
-    query += ` ORDER BY s.date DESC`;
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+
+    query = query.order('date', { ascending: false });
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Flatten for frontend
+    const formatted = data.map(s => ({
+        ...s,
+        category_name: s.category?.name || '',
+        client_name: s.owner?.name || ''
+    }));
+
+    res.json(formatted);
 });
 
-app.post('/api/sales', (req, res) => {
+app.post('/api/sales', async (req, res) => {
     const { owner_id, total, discount, payment_method, items, description, category_id, notes, date } = req.body;
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
+    try {
+        // For simple transactions in Supabase JS without RPC, we can do sequential calls.
+        // If high concurrency is expected, an RPC function would be better.
+        // For this app, sequential is likely fine but we should be careful.
 
-        db.run(`INSERT INTO sales (owner_id, total, discount, payment_method, description, category_id, notes, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [owner_id || null, total, discount, payment_method, description, category_id, notes, date || new Date().toISOString()],
-            function (err) {
-                if (err) {
-                    db.run('ROLLBACK');
-                    return res.status(500).json({ error: err.message });
+        const { data: saleData, error: saleError } = await supabase
+            .from('sales')
+            .insert([{
+                owner_id: owner_id || null,
+                total,
+                discount,
+                payment_method,
+                description,
+                category_id,
+                notes,
+                date: date || new Date().toISOString()
+            }])
+            .select();
+
+        if (saleError) throw saleError;
+        const saleId = saleData[0].id;
+
+        const saleItems = items.map(item => ({
+            sale_id: saleId,
+            product_id: item.product_id || null,
+            service_name: item.service_name || null,
+            quantity: item.quantity,
+            price: item.price
+        }));
+
+        const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
+        if (itemsError) throw itemsError;
+
+        // Update Stock
+        for (const item of items) {
+            if (item.product_id) {
+                // We need the current stock first to subtract
+                const { data: pData } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
+                if (pData) {
+                    await supabase.from('products').update({ stock: pData.stock - item.quantity }).eq('id', item.product_id);
                 }
-
-                const saleId = this.lastID;
-                const stmt = db.prepare(`INSERT INTO sale_items (sale_id, product_id, service_name, quantity, price) VALUES (?, ?, ?, ?, ?)`);
-
-                items.forEach(item => {
-                    stmt.run(saleId, item.product_id || null, item.service_name || null, item.quantity, item.price);
-
-                    // Deduct stock if it's a product
-                    if (item.product_id) {
-                        db.run(`UPDATE products SET stock = stock - ? WHERE id = ?`, [item.quantity, item.product_id]);
-                    }
-                });
-
-                stmt.finalize();
-                db.run('COMMIT', (err) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    res.json({ id: saleId });
-                });
             }
-        );
-    });
+        }
+
+        res.json({ id: saleId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Reports
-app.get('/api/reports/monthly_recruitment', (req, res) => {
+app.get('/api/reports/monthly_recruitment', async (req, res) => {
     const { month, year } = req.query;
-    const query = `
-        SELECT c.name as category, SUM(s.total) as total
-        FROM sales s
-        LEFT JOIN sales_categories c ON s.category_id = c.id
-        WHERE strftime('%m', s.date) = ? AND strftime('%Y', s.date) = ?
-        GROUP BY c.id
-    `;
-    db.all(query, [month.padStart(2, '0'), year], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+
+    const startDate = `${year}-${month.padStart(2, '0')}-01T00:00:00`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month.padStart(2, '0')}-${lastDay}T23:59:59`;
+
+    const { data, error } = await supabase
+        .from('sales')
+        .select(`
+            total,
+            category:sales_categories(name)
+        `)
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Group and sum manually since Supabase doesn't support GROUP BY directly via JS client well
+    const summary = data.reduce((acc, sale) => {
+        const catName = sale.category?.name || 'Sin Categoría';
+        acc[catName] = (acc[catName] || 0) + sale.total;
+        return acc;
+    }, {});
+
+    const rows = Object.keys(summary).map(cat => ({
+        category: cat,
+        total: summary[cat]
+    }));
+
+    res.json(rows);
 });
 
 // Logic for recurring costs and automatic cleanup
-const autoCleanupMonthlyData = () => {
+const autoCleanupMonthlyData = async () => {
     const now = new Date();
     const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
     const currentYear = now.getFullYear().toString();
 
     console.log(`[Cleanup] Checking data for ${currentMonth}/${currentYear}...`);
 
-    // Delete Sales from previous months
-    // Note: sale_items will be deleted automatically due to ON DELETE CASCADE
-    db.run(`DELETE FROM sales WHERE strftime('%m', date) != ? OR strftime('%Y', date) != ?`,
-        [currentMonth, currentYear],
-        function (err) {
-            if (err) console.error("[Cleanup] Error deleting old sales:", err);
-            else if (this.changes > 0) console.log(`[Cleanup] Deleted ${this.changes} old sales.`);
-        }
-    );
+    // In Supabase, we use simple delete with filters
+    const startDate = `${currentYear}-${currentMonth}-01T00:00:00`;
 
-    // Delete Costs from previous months
-    // We KEEP recurring costs because they serve as templates, but we delete the actual instances
-    // However, the user wants history removed, so we delete everything that isn't from this month
-    // EXCEPT we should probably keep the recurring flag costs if they are used as templates.
-    // Looking at processRecurringCosts, it looks for costs with is_recurring = 1.
-    // If we delete them, they won't auto-recur next month.
-    // So we delete only costs that ARE NOT recurring OR are recurring but the auto-generated ones.
+    // Delete Sales NOT in current month
+    const { error: saleErr } = await supabase.from('sales').delete().or(`date.lt.${startDate}`);
+    if (saleErr) console.error("[Cleanup] Error deleting old sales:", saleErr);
 
-    db.run(`DELETE FROM costs WHERE (strftime('%m', date) != ? OR strftime('%Y', date) != ?) AND is_recurring = 0`,
-        [currentMonth, currentYear],
-        function (err) {
-            if (err) console.error("[Cleanup] Error deleting old costs:", err);
-            else if (this.changes > 0) console.log(`[Cleanup] Deleted ${this.changes} old costs.`);
-        }
-    );
+    // Delete Costs NOT in current month AND not recurring templates
+    const { error: costErr } = await supabase
+        .from('costs')
+        .delete()
+        .lt('date', `${currentYear}-${currentMonth}-01`)
+        .eq('is_recurring', 0);
+    if (costErr) console.error("[Cleanup] Error deleting old costs:", costErr);
 };
 
-const processRecurringCosts = () => {
+const processRecurringCosts = async () => {
     const now = new Date();
     const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
     const currentYear = now.getFullYear().toString();
     const currentDate = now.toISOString().split('T')[0];
 
-    db.all(`SELECT * FROM costs WHERE is_recurring = 1`, [], (err, rows) => {
-        if (err || !rows) return;
+    // Get recurring templates
+    const { data: templates, error } = await supabase.from('costs').select('*').eq('is_recurring', 1);
+    if (error || !templates) return;
 
-        rows.forEach(cost => {
-            // Check if this recurring cost already exists for this month
-            db.get(`SELECT id FROM costs WHERE description = ? AND type = 'Fijo' AND strftime('%m', date) = ? AND strftime('%Y', date) = ?`,
-                [cost.description, currentMonth, currentYear],
-                (err, row) => {
-                    if (!row) {
-                        // Create it for this month
-                        db.run(`INSERT INTO costs (date, description, type, category, amount, frequency, supplier, is_recurring, notes) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                            [currentDate, cost.description, cost.type, cost.category, cost.amount, cost.frequency, cost.supplier, 0, cost.notes + ' (Auto-recurrido)']);
-                    }
-                }
-            );
-        });
-    });
+    for (const cost of templates) {
+        // Check if already created for this month
+        const startDate = `${currentYear}-${currentMonth}-01`;
+        const { data: existing } = await supabase
+            .from('costs')
+            .select('id')
+            .eq('description', cost.description)
+            .eq('type', 'Fijo')
+            .gte('date', startDate)
+            .single();
+
+        if (!existing) {
+            await supabase.from('costs').insert([{
+                date: currentDate,
+                description: cost.description,
+                type: cost.type,
+                category: cost.category,
+                amount: cost.amount,
+                frequency: cost.frequency,
+                supplier: cost.supplier,
+                is_recurring: 0,
+                notes: cost.notes + ' (Auto-recurrido)'
+            }]);
+        }
+    }
 };
 
 // Run cleanup and recurring costs check on server start
 setTimeout(() => {
     autoCleanupMonthlyData();
     processRecurringCosts();
-}, 2000);
+}, 5000);
 
 // Static files and fallback - v1.2
 app.use(express.static(path.join(__dirname, 'public')));
