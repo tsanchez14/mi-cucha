@@ -135,12 +135,8 @@ const reports = {
 
         const totalSales = salesList.reduce((sum, s) => sum + (s.total || 0), 0);
 
-        // Improved categorization since everything is marked as 'Variable' in costs.js
-        // We'll use the category name as a hint if type is set but we also check common fixed categories
-        const fixedCategories = ['Alquiler', 'Sueldos', 'Servicios'];
-
-        const fixedCosts = costsList.filter(c => c.type === 'Fijo' || fixedCategories.includes(c.category)).reduce((sum, c) => sum + (c.amount || 0), 0);
-        const varCosts = costsList.filter(c => (c.type === 'Variable' || !c.type) && !fixedCategories.includes(c.category)).reduce((sum, c) => sum + (c.amount || 0), 0);
+        const fixedCosts = costsList.filter(c => c.type === 'Fijo').reduce((sum, c) => sum + (c.amount || 0), 0);
+        const varCosts = costsList.filter(c => c.type === 'Variable' || !c.type).reduce((sum, c) => sum + (c.amount || 0), 0);
         const net = totalSales - (fixedCosts + varCosts);
 
         const elSales = document.getElementById('res-sales');

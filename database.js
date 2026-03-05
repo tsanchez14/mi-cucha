@@ -6,6 +6,9 @@ const db = new sqlite3.Database(dbPath);
 
 const initDb = () => {
     db.serialize(() => {
+        // Enable Foreign Keys
+        db.run("PRAGMA foreign_keys = ON");
+
         // Owners Table
         db.run(`CREATE TABLE IF NOT EXISTS owners (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,7 +110,7 @@ const initDb = () => {
             service_name TEXT, -- Optional, if it's a service instead of product
             quantity INTEGER,
             price REAL NOT NULL,
-            FOREIGN KEY (sale_id) REFERENCES sales(id),
+            FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
             FOREIGN KEY (product_id) REFERENCES products(id)
         )`);
 

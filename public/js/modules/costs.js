@@ -42,6 +42,7 @@ const costs = {
                                     <tr>
                                         <th class="ps-4">Fecha</th>
                                         <th>Descripción</th>
+                                        <th>Tipo</th>
                                         <th>Categoría</th>
                                         <th class="text-end">Monto</th>
                                         <th class="text-end pe-4">Acciones</th>
@@ -84,6 +85,13 @@ const costs = {
                                             <option value="Otros">Otros</option>
                                         </select>
                                     </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label font-weight-bold small text-muted text-uppercase" style="letter-spacing: 0.05em;">Tipo de Gasto *</label>
+                                        <select id="cost-type" class="form-select" required>
+                                            <option value="Variable">Variable</option>
+                                            <option value="Fijo">Fijo</option>
+                                        </select>
+                                    </div>
                                     <div class="col-12 mb-2">
                                         <label class="form-label font-weight-bold small text-muted text-uppercase" style="letter-spacing: 0.05em;">Descripción *</label>
                                         <input type="text" id="cost-desc" class="form-control" placeholder="Ej: Pago de alquiler marzo" required>
@@ -94,10 +102,6 @@ const costs = {
                                             <span class="input-group-text bg-white border-end-0 text-muted">$</span>
                                             <input type="number" id="cost-amount" class="form-control border-start-0" required>
                                         </div>
-                                    </div>
-                                    <div class="col-12">
-                                        <label class="form-label font-weight-bold small text-muted text-uppercase" style="letter-spacing: 0.05em;">Notas</label>
-                                        <textarea id="cost-notes" class="form-control" rows="2"></textarea>
                                     </div>
                                 </div>
                             </form>
@@ -158,6 +162,7 @@ const costs = {
                 <tr>
                     <td class="ps-4">${new Date(c.date).toLocaleDateString()}</td>
                     <td class="fw-bold">${c.description}</td>
+                    <td><span class="badge ${c.type === 'Fijo' ? 'bg-info' : 'bg-light text-dark'}">${c.type}</span></td>
                     <td>${c.category}</td>
                     <td class="text-end fw-bold text-danger">$${c.amount.toLocaleString()}</td>
                     <td class="text-end pe-4">
@@ -199,9 +204,9 @@ const costs = {
                 this.editingId = id;
                 document.getElementById('cost-date').value = cost.date.split('T')[0];
                 document.getElementById('cost-cat').value = cost.category;
+                document.getElementById('cost-type').value = cost.type || 'Variable';
                 document.getElementById('cost-desc').value = cost.description;
                 document.getElementById('cost-amount').value = cost.amount;
-                document.getElementById('cost-notes').value = cost.notes || '';
 
                 const modal = bootstrap.Modal.getInstance(document.getElementById('costModal'));
                 document.querySelector('#costModal .modal-title').innerText = 'Editar Gasto';
@@ -223,12 +228,12 @@ const costs = {
         const costData = {
             date: document.getElementById('cost-date').value,
             description: document.getElementById('cost-desc').value,
-            type: 'Variable', // Default since UI removed it
+            type: document.getElementById('cost-type').value,
             category: document.getElementById('cost-cat').value,
             amount: parseFloat(document.getElementById('cost-amount').value),
-            frequency: 'mensual',
-            is_recurring: false,
-            notes: document.getElementById('cost-notes').value
+            frequency: document.getElementById('cost-type').value === 'Fijo' ? 'mensual' : '',
+            is_recurring: document.getElementById('cost-type').value === 'Fijo',
+            notes: ''
         };
 
         try {

@@ -317,7 +317,41 @@ app.get('/api/reports/monthly_recruitment', (req, res) => {
     });
 });
 
-// Logic for recurring costs
+// Logic for recurring costs and automatic cleanup
+const autoCleanupMonthlyData = () => {
+    const now = new Date();
+    const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+    const currentYear = now.getFullYear().toString();
+
+    console.log(`[Cleanup] Checking data for ${currentMonth}/${currentYear}...`);
+
+    // Delete Sales from previous months
+    // Note: sale_items will be deleted automatically due to ON DELETE CASCADE
+    db.run(`DELETE FROM sales WHERE strftime('%m', date) != ? OR strftime('%Y', date) != ?`,
+        [currentMonth, currentYear],
+        function (err) {
+            if (err) console.error("[Cleanup] Error deleting old sales:", err);
+            else if (this.changes > 0) console.log(`[Cleanup] Deleted ${this.changes} old sales.`);
+        }
+    );
+
+    // Delete Costs from previous months
+    // We KEEP recurring costs because they serve as templates, but we delete the actual instances
+    // However, the user wants history removed, so we delete everything that isn't from this month
+    // EXCEPT we should probably keep the recurring flag costs if they are used as templates.
+    // Looking at processRecurringCosts, it looks for costs with is_recurring = 1.
+    // If we delete them, they won't auto-recur next month.
+    // So we delete only costs that ARE NOT recurring OR are recurring but the auto-generated ones.
+
+    db.run(`DELETE FROM costs WHERE (strftime('%m', date) != ? OR strftime('%Y', date) != ?) AND is_recurring = 0`,
+        [currentMonth, currentYear],
+        function (err) {
+            if (err) console.error("[Cleanup] Error deleting old costs:", err);
+            else if (this.changes > 0) console.log(`[Cleanup] Deleted ${this.changes} old costs.`);
+        }
+    );
+};
+
 const processRecurringCosts = () => {
     const now = new Date();
     const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -336,7 +370,7 @@ const processRecurringCosts = () => {
                         // Create it for this month
                         db.run(`INSERT INTO costs (date, description, type, category, amount, frequency, supplier, is_recurring, notes) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                            [currentDate, cost.description, cost.type, cost.category, cost.amount, cost.frequency, cost.supplier, 1, cost.notes + ' (Auto-recurrido)']);
+                            [currentDate, cost.description, cost.type, cost.category, cost.amount, cost.frequency, cost.supplier, 0, cost.notes + ' (Auto-recurrido)']);
                     }
                 }
             );
@@ -344,8 +378,11 @@ const processRecurringCosts = () => {
     });
 };
 
-// Run recurring costs check on server start
-setTimeout(processRecurringCosts, 2000);
+// Run cleanup and recurring costs check on server start
+setTimeout(() => {
+    autoCleanupMonthlyData();
+    processRecurringCosts();
+}, 2000);
 
 // Static files and fallback - v1.2
 app.use(express.static(path.join(__dirname, 'public')));
