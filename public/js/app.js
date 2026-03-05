@@ -61,10 +61,24 @@ const app = {
                 item.classList.remove('active');
             }
         });
+    },
+
+    initGlobalEvents() {
+        window.onclick = (event) => {
+            if (!event.target.matches('.btn-dots') && !event.target.closest('.btn-dots')) {
+                const dropdowns = document.getElementsByClassName('dropdown-menu-custom');
+                for (let i = 0; i < dropdowns.length; i++) {
+                    dropdowns[i].classList.remove('show');
+                }
+            }
+        };
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => app.init());
+document.addEventListener('DOMContentLoaded', () => {
+    app.init();
+    app.initGlobalEvents();
+});
 
 export default app;
 export { API_BASE };

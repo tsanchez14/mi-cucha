@@ -6,12 +6,12 @@ const appointments = {
     async render(container) {
         container.innerHTML = `
             <div class="module-wrapper">
-                <div class="module-header d-flex justify-content-between align-items-center py-5 mb-3 border-bottom bg-white px-4 sticky-top" style="z-index: 10;">
+                <div class="module-header d-flex justify-content-between align-items-center py-1 mb-1 bg-white px-4 sticky-top" style="z-index: 10;">
                     <div>
                         <h1 class="h3 font-weight-bold mb-1">Calendarios de Turnos</h1>
                         <p class="text-muted mb-0">Gestiona las citas del día y las próximas</p>
                     </div>
-                    <button id="btn-add-appointment" class="btn btn-primary px-4 py-2 shadow-sm rounded-pill font-weight-bold">
+                    <button id="btn-add-appointment" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Agendar Turno
                     </button>
                 </div>
@@ -213,16 +213,16 @@ const appointments = {
                         <h3 class="mb-0 fw-bold">Agendar Turno</h3>
                         <span class="badge bg-light text-muted" style="font-size: 0.6rem;">v1.4</span>
                     </div>
-                    <form id="appointment-form">
-                        <div class="form-group mb-4">
+                    <form id="appointment-form" autocomplete="off">
+                        <div class="form-group mb-3">
                             <label>Nombre de la Mascota / Dueño*</label>
-                            <input type="text" name="display_name" class="form-control" placeholder="Ej: Toby (Juan Perez)" required>
+                            <input type="text" id="appt-search" class="form-control" placeholder="Buscar por mascota o dueño..." autocomplete="off" required>
                         </div>
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <label>Teléfono (para WhatsApp)*</label>
-                            <input type="text" name="phone" id="appointment-phone" class="form-control" placeholder="Ej: 54911..." required>
+                            <input type="text" name="phone" id="appointment-phone" class="form-control" placeholder="Ej: 54911..." autocomplete="off" required>
                         </div>
-                        <div class="row mb-4">
+                        <div class="row mb-3">
                             <div class="col">
                                 <label>Fecha*</label>
                                 <input type="date" name="date" class="form-control" value="${this.currentDate.toISOString().split('T')[0]}" required>
@@ -232,16 +232,16 @@ const appointments = {
                                 <input type="time" name="time" class="form-control" required>
                             </div>
                         </div>
-                        <div class="form-group mb-5">
+                        <div class="form-group mb-4">
                             <label>Motivo</label>
                             <textarea name="reason" class="form-control" rows="2" placeholder="Consulta general, vacuna..."></textarea>
                         </div>
                         
-                        <div class="d-flex flex-column gap-3">
-                            <button type="button" id="btn-wa-confirm" class="btn btn-success w-100 py-3 font-weight-bold d-flex align-items-center justify-content-center shadow-sm">
+                        <div class="d-flex flex-column gap-2">
+                            <button type="button" id="btn-wa-confirm" class="btn btn-success w-100 py-2 font-weight-bold d-flex align-items-center justify-content-center shadow-sm">
                                 <i class="fab fa-whatsapp me-2 fa-lg"></i> Guardar y Enviar WhatsApp
                             </button>
-                            <button type="button" class="btn btn-light w-100 py-3 font-weight-bold text-muted border" onclick="document.getElementById('appointment-modal-container').remove()">
+                            <button type="button" class="btn btn-light w-100 py-2 font-weight-bold text-muted border" onclick="document.getElementById('appointment-modal-container').remove()">
                                 <i class="fas fa-times me-2"></i> Cancelar
                             </button>
                         </div>
@@ -250,9 +250,9 @@ const appointments = {
             </div>
             <style>
                 .custom-modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
-                .custom-modal { background: white; padding: 2.5rem; border-radius: 24px; width: 480px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid #eee; }
-                .form-group label { display: block; margin-bottom: 0.6rem; font-weight: 600; font-size: 0.85rem; color: #4a5568; }
-                .form-control { width: 100%; padding: 0.85rem 1.1rem; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.95rem; }
+                .custom-modal { background: white; padding: 1.75rem; border-radius: 24px; width: 400px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid #eee; }
+                .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 600; font-size: 0.8rem; color: #4a5568; }
+                .form-control { width: 100%; padding: 0.7rem 1rem; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.9rem; }
                 .btn-success { background-color: #25d366 !important; color: white !important; border: none !important; transition: all 0.2s; }
                 .btn-success:hover { background-color: #128c7e !important; transform: translateY(-1px); }
                 .btn-success:active { transform: translateY(0); }

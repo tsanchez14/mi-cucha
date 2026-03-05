@@ -2,9 +2,10 @@ import { API_BASE } from '../app.js';
 
 const stock = {
     async render(container) {
+        console.log('Rendering Stock Module v1.3');
         container.innerHTML = `
             <div class="module-wrapper">
-                <div class="module-header d-flex justify-content-between align-items-center mb-4">
+                <div class="module-header d-flex justify-content-between align-items-center mb-1">
                     <div>
                         <h1 class="h3 font-weight-bold">Control de Stock</h1>
                         <p class="text-muted">Inventario de productos y suministros</p>
@@ -55,7 +56,7 @@ const stock = {
             <div id="modal-container"></div>
 
             <style>
-                .module-wrapper { padding: 1.5rem; }
+                .module-wrapper { padding: 0.25rem 0.5rem; }
                 .border-danger-light { border: 1px solid #fee2e2; background: #fef2f2; }
                 .text-danger { color: #dc2626; }
                 .table { width: 100%; border-collapse: collapse; }
@@ -96,10 +97,16 @@ const stock = {
                             ${p.stock <= p.min_stock ? 'Stock Bajo' : 'Normal'}
                         </span>
                     </td>
-                    <td>
-                        <button class="btn btn-sm btn-light" onclick="window.stockModule.adjustStock(${p.id}, ${p.stock})">
-                            <i class="fas fa-exchange-alt"></i> Stock
-                        </button>
+                    <td class="text-end pe-3">
+                        <div class="dropdown-actions">
+                            <button class="btn-dots" onclick="window.stockModule.toggleActions(${p.id})">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div id="menu-${p.id}" class="dropdown-menu-custom text-start">
+                                <button class="dropdown-item-custom" onclick="window.stockModule.editProduct(${p.id})">Editar</button>
+                                <button class="dropdown-item-custom danger" onclick="window.stockModule.deleteProduct(${p.id})">Eliminar</button>
+                            </div>
+                        </div>
                     </td>
                 </tr>
             `).join('');
@@ -110,15 +117,38 @@ const stock = {
         }
     },
 
-    async adjustStock(productId, currentStock) {
-        const amount = prompt(`Ajustar stock (Actual: ${currentStock}). Ingrese el nuevo valor total:`, currentStock);
-        if (amount === null || isNaN(amount)) return;
 
-        // In a real app we'd have a specific PATCH endpoint, but let's assume we update the whole product or have a specific movement API
-        alert('Funcionalidad de ajuste manual en desarrollo. Pronto disponible.');
+    toggleActions(id) {
+        const menu = document.getElementById(`menu-${id}`);
+        const allMenus = document.getElementsByClassName('dropdown-menu-custom');
+        for (let m of allMenus) {
+            if (m.id !== `menu-${id}`) m.classList.remove('show');
+        }
+        menu.classList.toggle('show');
     },
 
-    async showProductForm() {
+    async editProduct(id) {
+        try {
+            const resp = await fetch(`${API_BASE}/products`);
+            const products = await resp.json();
+            const product = products.find(p => p.id === id);
+            if (product) {
+                this.editingId = id;
+                this.showProductForm(product);
+            }
+        } catch (err) { alert(err.message); }
+    },
+
+    async deleteProduct(id) {
+        if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+        try {
+            const resp = await fetch(`${API_BASE}/products/${id}`, { method: 'DELETE' });
+            if (resp.ok) this.loadProducts();
+            else alert('Error al eliminar');
+        } catch (err) { alert(err.message); }
+    },
+
+    async showProductForm(productToEdit = null) {
         const container = document.createElement('div');
         container.id = 'product-modal-container';
         document.body.appendChild(container);
@@ -130,61 +160,61 @@ const stock = {
             container.innerHTML = `
                 <div class="custom-modal-backdrop">
                     <div class="custom-modal">
-                        <h3 class="mb-4">Nuevo Producto</h3>
-                        <form id="product-form">
-                            <div class="form-group mb-4">
+                        <h3 class="mb-4">${productToEdit ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+                        <form id="product-form" autocomplete="off">
+                            <div class="form-group mb-3">
                                 <label>Nombre del Producto*</label>
-                                <input type="text" name="name" class="form-control" placeholder="Ej: Amoxicilina 500mg" required>
+                                <input type="text" name="name" class="form-control" placeholder="Ej: Amoxicilina 500mg" value="${productToEdit ? productToEdit.name : ''}" required>
                             </div>
-                            <div class="row mb-4">
-                                <div class="col">
+                            <div class="row mb-3">
+                                <div class="col-7">
                                     <label>Categoría</label>
-                                    <input type="text" name="category" class="form-control" placeholder="Ej: Medicamento">
+                                    <input type="text" name="category" class="form-control" placeholder="Ej: Medicamento" value="${productToEdit ? (productToEdit.category || '') : ''}">
                                 </div>
-                                <div class="col">
+                                <div class="col-5">
                                     <label>Unidad</label>
-                                    <input type="text" name="unit" class="form-control" placeholder="Ej: ml, comp, kg">
+                                    <input type="text" name="unit" class="form-control" placeholder="Ej: ml, comp, kg" value="${productToEdit ? (productToEdit.unit || '') : ''}">
                                 </div>
                             </div>
-                            <div class="row mb-4">
+                            <div class="row mb-3">
                                 <div class="col">
                                     <label>Stock Inicial</label>
-                                    <input type="number" name="stock" class="form-control" value="0">
+                                    <input type="number" name="stock" class="form-control" value="${productToEdit ? productToEdit.stock : '0'}">
                                 </div>
                                 <div class="col">
                                     <label>Stock Mínimo</label>
-                                    <input type="number" name="min_stock" class="form-control" value="5">
+                                    <input type="number" name="min_stock" class="form-control" value="${productToEdit ? productToEdit.min_stock : '5'}">
                                 </div>
                             </div>
-                            <div class="row mb-4">
+                            <div class="row mb-3">
                                 <div class="col">
                                     <label>Precio Costo ($)</label>
-                                    <input type="number" step="0.01" name="cost_price" class="form-control">
+                                    <input type="number" step="0.01" name="cost_price" class="form-control" value="${productToEdit ? (productToEdit.cost_price || '') : ''}">
                                 </div>
                                 <div class="col">
                                     <label>Precio Venta ($)</label>
-                                    <input type="number" step="0.01" name="sell_price" class="form-control">
+                                    <input type="number" step="0.01" name="sell_price" class="form-control" value="${productToEdit ? (productToEdit.sell_price || '') : ''}">
                                 </div>
                             </div>
-                            <div class="form-group mb-5">
+                            <div class="form-group mb-4">
                                 <label>Proveedor</label>
                                 <select name="supplier_id" class="form-control">
                                     <option value="">Seleccionar proveedor...</option>
-                                    ${suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                                    ${suppliers.map(s => `<option value="${s.id}" ${productToEdit && productToEdit.supplier_id == s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
                                 </select>
                             </div>
-                            <div class="d-flex justify-content-end gap-3 mt-2">
-                                <button type="button" class="btn btn-link py-2" onclick="document.getElementById('product-modal-container').remove()">Cancelar</button>
-                                <button type="submit" class="btn btn-primary px-4 py-2 font-weight-bold">Guardar Producto</button>
+                            <div class="d-flex justify-content-end gap-2 mt-2">
+                                <button type="button" class="btn btn-link py-1 text-decoration-none" onclick="document.getElementById('product-modal-container').remove()">Cancelar</button>
+                                <button type="submit" class="btn btn-primary px-3 py-2 font-weight-bold">${productToEdit ? 'Actualizar Producto' : 'Guardar Producto'}</button>
                             </div>
                         </form>
                     </div>
                 </div>
                 <style>
                     .custom-modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
-                    .custom-modal { background: white; padding: 2.5rem; border-radius: 16px; width: 580px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
-                    .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.85rem; color: #4a5568; }
-                    .form-control { width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 0.95rem; }
+                    .custom-modal { background: white; padding: 1.75rem; border-radius: 16px; width: 440px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
+                    .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 600; font-size: 0.8rem; color: #4a5568; }
+                    .form-control { width: 100%; padding: 0.7rem 1rem; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 0.9rem; }
                     .form-control:focus { border-color: #4e73df; outline: none; box-shadow: 0 0 0 3px rgba(78, 115, 223, 0.1); }
                     .row { display: flex; margin: 0 -8px; }
                     .col { flex: 1; padding: 0 8px; }
@@ -201,13 +231,16 @@ const stock = {
                 const data = Object.fromEntries(formData.entries());
 
                 try {
-                    const resp = await fetch(`${API_BASE}/products`, {
-                        method: 'POST',
+                    const url = this.editingId ? `${API_BASE}/products/${this.editingId}` : `${API_BASE}/products`;
+                    const method = this.editingId ? 'PUT' : 'POST';
+                    const resp = await fetch(url, {
+                        method: method,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
                     if (resp.ok) {
                         container.remove();
+                        this.editingId = null;
                         this.loadProducts();
                     }
                 } catch (err) { alert(err.message); }

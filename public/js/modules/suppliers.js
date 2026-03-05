@@ -4,7 +4,7 @@ const suppliers = {
     async render(container) {
         container.innerHTML = `
             <div class="module-wrapper">
-                <div class="module-header d-flex justify-content-between align-items-center mb-4">
+                <div class="module-header d-flex justify-content-between align-items-center mb-1">
                     <div>
                         <h1 class="h3 font-weight-bold">Proveedores</h1>
                         <p class="text-muted">Gestión de laboratorios y distribuidores</p>
@@ -37,7 +37,7 @@ const suppliers = {
             <div id="modal-container"></div>
 
             <style>
-                .module-wrapper { padding: 1.5rem; }
+                .module-wrapper { padding: 0.25rem 0.5rem; }
                 .table { width: 100%; border-collapse: collapse; }
                 .table th { text-align: left; padding: 1rem; border-bottom: 2px solid #edf2f7; color: #718096; font-size: 0.8rem; }
                 .table td { padding: 1rem; border-bottom: 1px solid #edf2f7; }
@@ -74,17 +74,56 @@ const suppliers = {
                         </div>
                     </td>
                     <td><span class="text-muted small">${s.products || '-'}</span></td>
-                    <td>
-                        <button class="btn-icon"><i class="fas fa-edit"></i></button>
+                    <td class="text-end pe-3">
+                        <div class="dropdown-actions">
+                            <button class="btn-dots" onclick="window.suppliersModule.toggleActions(${s.id})">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div id="menu-${s.id}" class="dropdown-menu-custom text-start">
+                                <button class="dropdown-item-custom" onclick="window.suppliersModule.editSupplier(${s.id})">Editar</button>
+                                <button class="dropdown-item-custom danger" onclick="window.suppliersModule.deleteSupplier(${s.id})">Eliminar</button>
+                            </div>
+                        </div>
                     </td>
                 </tr>
             `).join('');
+            window.suppliersModule = this;
         } catch (e) {
             list.innerHTML = '<tr><td colspan="5">Error al cargar proveedores</td></tr>';
         }
     },
 
-    async showSupplierForm() {
+    toggleActions(id) {
+        const menu = document.getElementById(`menu-${id}`);
+        const allMenus = document.getElementsByClassName('dropdown-menu-custom');
+        for (let m of allMenus) {
+            if (m.id !== `menu-${id}`) m.classList.remove('show');
+        }
+        menu.classList.toggle('show');
+    },
+
+    async editSupplier(id) {
+        try {
+            const resp = await fetch(`${API_BASE}/suppliers`);
+            const data = await resp.json();
+            const supplier = data.find(s => s.id === id);
+            if (supplier) {
+                this.editingId = id;
+                this.showSupplierForm(supplier);
+            }
+        } catch (err) { alert(err.message); }
+    },
+
+    async deleteSupplier(id) {
+        if (!confirm('¿Estás seguro de eliminar este proveedor?')) return;
+        try {
+            const resp = await fetch(`${API_BASE}/suppliers/${id}`, { method: 'DELETE' });
+            if (resp.ok) this.loadSuppliers();
+            else alert('Error al eliminar');
+        } catch (err) { alert(err.message); }
+    },
+
+    async showSupplierForm(supplierToEdit = null) {
         const container = document.createElement('div');
         container.id = 'supplier-modal-container';
         document.body.appendChild(container);
@@ -92,42 +131,42 @@ const suppliers = {
         container.innerHTML = `
             <div class="custom-modal-backdrop">
                 <div class="custom-modal">
-                    <h3 class="mb-4">Nuevo Proveedor</h3>
-                    <form id="supplier-form">
-                        <div class="form-group mb-4">
+                    <h3 class="mb-4">${supplierToEdit ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h3>
+                    <form id="supplier-form" autocomplete="off">
+                        <div class="form-group mb-3">
                             <label>Nombre del Proveedor*</label>
-                            <input type="text" name="name" class="form-control" placeholder="Ej: Distribuidora Vet..." required>
+                            <input type="text" name="name" class="form-control" placeholder="Ej: Distribuidora Vet..." value="${supplierToEdit ? supplierToEdit.name : ''}" required>
                         </div>
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <label>Persona de Contacto</label>
-                            <input type="text" name="contact" class="form-control" placeholder="Ej: Juan Gomez">
+                            <input type="text" name="contact" class="form-control" placeholder="Ej: Juan Gomez" value="${supplierToEdit ? (supplierToEdit.contact || '') : ''}">
                         </div>
-                        <div class="row mb-4">
+                        <div class="row mb-3">
                             <div class="col">
                                 <label>Teléfono</label>
-                                <input type="text" name="phone" class="form-control">
+                                <input type="text" name="phone" class="form-control" value="${supplierToEdit ? (supplierToEdit.phone || '') : ''}">
                             </div>
                             <div class="col">
                                 <label>Email</label>
-                                <input type="email" name="email" class="form-control">
+                                <input type="email" name="email" class="form-control" value="${supplierToEdit ? (supplierToEdit.email || '') : ''}">
                             </div>
                         </div>
-                        <div class="form-group mb-5">
+                        <div class="form-group mb-4">
                             <label>Productos que suministra</label>
-                            <textarea name="products" class="form-control" rows="2" placeholder="Ej: Vacunas, Alimento Balanceado..."></textarea>
+                            <textarea name="products" class="form-control" rows="2" placeholder="Ej: Vacunas, Alimento Balanceado...">${supplierToEdit ? (supplierToEdit.products || '') : ''}</textarea>
                         </div>
-                        <div class="d-flex justify-content-end gap-3 mt-2">
-                            <button type="button" class="btn btn-link py-2" onclick="document.getElementById('supplier-modal-container').remove()">Cancelar</button>
-                            <button type="submit" class="btn btn-primary px-4 py-2 font-weight-bold">Guardar Proveedor</button>
+                        <div class="d-flex justify-content-end gap-2 mt-2">
+                            <button type="button" class="btn btn-link py-1 text-decoration-none" onclick="document.getElementById('supplier-modal-container').remove()">Cancelar</button>
+                            <button type="submit" class="btn btn-primary px-3 py-2 font-weight-bold">${supplierToEdit ? 'Actualizar Proveedor' : 'Guardar Proveedor'}</button>
                         </div>
                     </form>
                 </div>
             </div>
             <style>
                 .custom-modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
-                .custom-modal { background: white; padding: 2.5rem; border-radius: 16px; width: 500px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
-                .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.85rem; color: #4a5568; }
-                .form-control { width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 0.95rem; }
+                .custom-modal { background: white; padding: 1.75rem; border-radius: 16px; width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
+                .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 600; font-size: 0.8rem; color: #4a5568; }
+                .form-control { width: 100%; padding: 0.7rem 1rem; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 0.9rem; }
                 .form-control:focus { border-color: #4e73df; outline: none; box-shadow: 0 0 0 3px rgba(78, 115, 223, 0.1); }
                 .row { display: flex; margin: 0 -8px; }
                 .col { flex: 1; padding: 0 8px; }
@@ -144,13 +183,16 @@ const suppliers = {
             const data = Object.fromEntries(formData.entries());
 
             try {
-                const resp = await fetch(`${API_BASE}/suppliers`, {
-                    method: 'POST',
+                const url = this.editingId ? `${API_BASE}/suppliers/${this.editingId}` : `${API_BASE}/suppliers`;
+                const method = this.editingId ? 'PUT' : 'POST';
+                const resp = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 if (resp.ok) {
                     container.remove();
+                    this.editingId = null;
                     this.loadSuppliers();
                 }
             } catch (err) { alert(err.message); }

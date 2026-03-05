@@ -78,15 +78,25 @@ const initDb = () => {
             FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
         )`);
 
-        // Sales Table
+        // Sales Categories Table
+        db.run(`CREATE TABLE IF NOT EXISTS sales_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE
+        )`);
+
+        // Sales Table (Updated/New)
         db.run(`CREATE TABLE IF NOT EXISTS sales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            owner_id INTEGER,
+            date DATETIME DEFAULT CURRENT_TIMESTAMP,
+            description TEXT,
+            category_id INTEGER,
             total REAL NOT NULL,
             discount REAL DEFAULT 0,
-            payment_method TEXT, -- cash, card, transfer
-            date DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (owner_id) REFERENCES owners(id)
+            owner_id INTEGER, -- Optional client
+            payment_method TEXT, -- cash, transfer, card
+            notes TEXT,
+            FOREIGN KEY (owner_id) REFERENCES owners(id),
+            FOREIGN KEY (category_id) REFERENCES sales_categories(id)
         )`);
 
         // Sale Items Table
@@ -100,6 +110,27 @@ const initDb = () => {
             FOREIGN KEY (sale_id) REFERENCES sales(id),
             FOREIGN KEY (product_id) REFERENCES products(id)
         )`);
+
+        // Costs Table
+        db.run(`CREATE TABLE IF NOT EXISTS costs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date DATE NOT NULL,
+            description TEXT NOT NULL,
+            type TEXT NOT NULL, -- Fixed / Variable
+            category TEXT NOT NULL, -- Alquiler, Sueldos, Insumos, Servicios, Marketing, Otros
+            amount REAL NOT NULL,
+            frequency TEXT, -- mensual/anual (for fixed)
+            supplier TEXT,
+            is_recurring INTEGER DEFAULT 0,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Insert Default Sales Categories
+        const defaultCategories = ['Productos', 'Servicios', 'Mayorista', 'Minorista'];
+        defaultCategories.forEach(cat => {
+            db.run(`INSERT OR IGNORE INTO sales_categories (name) VALUES (?)`, [cat]);
+        });
 
         console.log("Database initialized successfully.");
     });

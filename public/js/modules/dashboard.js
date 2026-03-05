@@ -5,9 +5,9 @@ const dashboard = {
         const stats = await this.fetchStats();
 
         container.innerHTML = `
-            <div class="dashboard-header mb-4">
-                <h1 class="h3 font-weight-bold">Resumen de Hoy</h1>
-                <p class="text-muted">Bienvenido al sistema Veterasky</p>
+            <div class="dashboard-header mb-1">
+                <h1 class="h3 font-weight-bold mb-0">Resumen de Hoy</h1>
+                <p class="text-muted small mb-0">Bienvenido al sistema Veterasky</p>
             </div>
 
             <div class="stats-grid">
@@ -49,7 +49,7 @@ const dashboard = {
                 </div>
             </div>
 
-            <div class="row mt-4">
+            <div class="row mt-2">
                 <div class="col-lg-8">
                     <div class="card">
                         <div class="card-header">
@@ -77,12 +77,12 @@ const dashboard = {
                 .stats-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                    gap: 1.5rem;
-                    margin-bottom: 2rem;
+                    gap: 1rem;
+                    margin-bottom: 1rem;
                 }
                 .stat-card {
                     background: white;
-                    padding: 1.5rem;
+                    padding: 1rem;
                     border-radius: 12px;
                     display: flex;
                     align-items: center;
