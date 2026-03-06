@@ -86,30 +86,34 @@ const stock = {
             const lowStock = products.filter(p => p.stock <= p.min_stock);
             document.getElementById('low-stock-count').textContent = lowStock.length;
 
-            list.innerHTML = products.map(p => `
-                <tr>
-                    <td><strong>${p.name}</strong><br><small class="text-muted">${p.unit}</small></td>
-                    <td>${p.category || 'Gral'}</td>
-                    <td>${p.stock}</td>
-                    <td>$${p.sell_price}</td>
-                    <td>
-                        <span class="badge-stock ${p.stock <= p.min_stock ? 'badge-low' : 'badge-ok'}">
-                            ${p.stock <= p.min_stock ? 'Stock Bajo' : 'Normal'}
-                        </span>
-                    </td>
-                    <td class="text-end pe-3">
-                        <div class="dropdown-actions">
-                            <button class="btn-dots" onclick="window.stockModule.toggleActions(${p.id})">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <div id="menu-${p.id}" class="dropdown-menu-custom text-start">
-                                <button class="dropdown-item-custom" onclick="window.stockModule.editProduct(${p.id})">Editar</button>
-                                <button class="dropdown-item-custom danger" onclick="window.stockModule.deleteProduct(${p.id})">Eliminar</button>
+            if (products.length === 0) {
+                list.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">No hay productos registrados</td></tr>';
+            } else {
+                list.innerHTML = products.map(p => `
+                    <tr>
+                        <td><strong>${p.name}</strong><br><small class="text-muted">${p.unit}</small></td>
+                        <td>${p.category || 'Gral'}</td>
+                        <td>${p.stock}</td>
+                        <td>$${p.sell_price}</td>
+                        <td>
+                            <span class="badge-stock ${p.stock <= p.min_stock ? 'badge-low' : 'badge-ok'}">
+                                ${p.stock <= p.min_stock ? 'Stock Bajo' : 'Normal'}
+                            </span>
+                        </td>
+                        <td class="text-end pe-3">
+                            <div class="dropdown-actions">
+                                <button class="btn-dots" onclick="window.stockModule.toggleActions(${p.id})">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <div id="menu-${p.id}" class="dropdown-menu-custom text-start">
+                                    <button class="dropdown-item-custom" onclick="window.stockModule.editProduct(${p.id})">Editar</button>
+                                    <button class="dropdown-item-custom danger" onclick="window.stockModule.deleteProduct(${p.id})">Eliminar</button>
+                                </div>
                             </div>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+                        </td>
+                    </tr>
+                `).join('');
+            }
 
             window.stockModule = this;
         } catch (e) {

@@ -7,7 +7,7 @@ const dashboard = {
         container.innerHTML = `
             <div class="dashboard-header mb-1">
                 <h1 class="h3 font-weight-bold mb-0">Resumen de Hoy</h1>
-                <p class="text-muted small mb-0">Bienvenido al sistema Veterasky</p>
+                <p class="text-muted small mb-0">Bienvenido al sistema Mi Cucha</p>
             </div>
 
             <div class="stats-grid">
