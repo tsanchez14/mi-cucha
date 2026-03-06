@@ -98,16 +98,14 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.get('/api/products/low-stock', async (req, res) => {
-    const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .lte('stock', supabase.raw('min_stock'));
-    // Note: lte with column comparison might need a different approach in supabase-js or just fetch and filter
-    // Alternative:
-    const { data: allProducts, error: err } = await supabase.from('products').select('*');
-    if (err) return res.status(500).json({ error: err.message });
-    const lowStock = allProducts.filter(p => p.stock <= p.min_stock);
-    res.json(lowStock);
+    try {
+        const { data: allProducts, error: err } = await supabase.from('products').select('*');
+        if (err) throw err;
+        const lowStock = allProducts.filter(p => p.stock <= p.min_stock);
+        res.json(lowStock);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.post('/api/products', async (req, res) => {
@@ -263,7 +261,7 @@ app.delete('/api/costs/:id', async (req, res) => {
 
 // Sales
 app.get('/api/sales', async (req, res) => {
-    const { month, year } = req.query;
+    const { month, year, date } = req.query;
     let query = supabase
         .from('sales')
         .select(`
@@ -272,7 +270,12 @@ app.get('/api/sales', async (req, res) => {
             owner:owners(name)
         `);
 
-    if (month && year) {
+    if (date) {
+        // Handle single date filter
+        const startOfDay = `${date}T00:00:00`;
+        const endOfDay = `${date}T23:59:59`;
+        query = query.gte('date', startOfDay).lte('date', endOfDay);
+    } else if (month && year) {
         const startDate = `${year}-${month.padStart(2, '0')}-01T00:00:00`;
         const lastDay = new Date(year, month, 0).getDate();
         const endDate = `${year}-${month.padStart(2, '0')}-${lastDay}T23:59:59`;

@@ -129,32 +129,34 @@ const dashboard = {
     },
 
     async fetchStats() {
-        // Mocking for now until specific dashboard endpoints are ready
-        // In real app, we would have a /api/dashboard endpoint
         try {
-            const [aptResp, prodResp] = await Promise.all([
-                fetch(`${API_BASE}/appointments`),
-                fetch(`${API_BASE}/products/low-stock`)
+            const todayStr = new Date().toLocaleDateString('en-CA'); // Gets YYYY-MM-DD reliably
+
+            const [aptResp, prodResp, salesResp] = await Promise.all([
+                fetch(`${API_BASE}/appointments?date=${todayStr}`),
+                fetch(`${API_BASE}/products/low-stock`),
+                fetch(`${API_BASE}/sales?date=${todayStr}`)
             ]);
 
-            const appointments = await aptResp.json();
+            const todayAppointments = await aptResp.json();
             const lowStockList = await prodResp.json();
+            const todaySales = await salesResp.json();
 
-            const todayStr = new Date().toISOString().split('T')[0];
-            const todayAppointments = appointments.filter(a => a.date === todayStr);
+            const salesTotal = todaySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
 
             return {
-                appointmentsToday: todayAppointments.length,
-                lowStockItems: lowStockList.length,
-                salesToday: 0, // Placeholder
-                todayAppointmentsList: todayAppointments,
-                lowStockList: lowStockList
+                appointmentsToday: Array.isArray(todayAppointments) ? todayAppointments.length : 0,
+                lowStockItems: Array.isArray(lowStockList) ? lowStockList.length : 0,
+                salesToday: salesTotal.toLocaleString('es-AR'),
+                todayAppointmentsList: Array.isArray(todayAppointments) ? todayAppointments : [],
+                lowStockList: Array.isArray(lowStockList) ? lowStockList : []
             };
         } catch (e) {
+            console.error('Error fetching dashboard stats:', e);
             return {
                 appointmentsToday: 0,
                 lowStockItems: 0,
-                salesToday: 0,
+                salesToday: '0',
                 todayAppointmentsList: [],
                 lowStockList: []
             };
