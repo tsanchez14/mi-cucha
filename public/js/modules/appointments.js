@@ -263,7 +263,7 @@ const appointments = {
         const saveAppointment = async () => {
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
-            const msg = `Hola! Confirmamos tu turno en Veterasky para ${data.display_name} el día ${data.date} a las ${data.time}. Te esperamos!`;
+            const msg = `Hola! Confirmamos tu turno en Mi Cucha para ${data.display_name} el día ${data.date} a las ${data.time}. Te esperamos!`;
             const waUrl = `https://wa.me/${data.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
 
             try {

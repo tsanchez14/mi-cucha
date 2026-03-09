@@ -94,8 +94,11 @@ const sales = {
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
                         <div class="card-body p-0">
-                            <div class="p-4 border-bottom">
+                            <div class="p-4 border-bottom d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0"><i class="fas fa-history me-2"></i>Historial de Ventas Recientes</h5>
+                                <button id="btn-download-pdf" class="btn btn-outline-danger btn-sm">
+                                    <i class="fas fa-file-pdf me-1"></i> Descargar PDF Mensual
+                                </button>
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle mb-0">
@@ -306,6 +309,12 @@ const sales = {
 
         // Complete sale
         document.getElementById('btn-complete-sale').addEventListener('click', () => this.completeSale());
+
+        // Download PDF
+        const btnPdf = document.getElementById('btn-download-pdf');
+        if (btnPdf) {
+            btnPdf.addEventListener('click', () => this.downloadMonthHistory());
+        }
     },
 
     updateQuantity(index, delta) {
@@ -423,6 +432,72 @@ const sales = {
             alert('Error al procesar la venta: ' + error.message);
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-check-circle me-2"></i> REGISTRAR VENTA';
+        }
+    },
+
+    async downloadMonthHistory() {
+        const now = new Date();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const year = now.getFullYear();
+        const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        const currentMonthName = monthNames[now.getMonth()];
+
+        const btn = document.getElementById('btn-download-pdf');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Cargando...';
+
+        try {
+            const resp = await fetch(`${API_BASE}/sales?month=${month}&year=${year}`);
+            const salesData = await resp.json();
+
+            if (!salesData || salesData.length === 0) {
+                alert('No hay ventas registradas en este mes para exportar.');
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(18);
+            doc.text("Mi Cucha - Gestión Veterinaria", 14, 20);
+            doc.setFontSize(12);
+            doc.setTextColor(100);
+            doc.text(`Reporte de Ventas - ${currentMonthName} ${year}`, 14, 30);
+            doc.text(`Fecha de generación: ${new Date().toLocaleString()}`, 14, 37);
+
+            // Table
+            const tableData = salesData.map(s => [
+                new Date(s.date).toLocaleDateString(),
+                s.description || 'Sin descripción',
+                s.payment_method || 'N/A',
+                `$${s.total.toLocaleString()}`
+            ]);
+
+            const totalMonth = salesData.reduce((sum, s) => sum + s.total, 0);
+
+            doc.autoTable({
+                startY: 45,
+                head: [['Fecha', 'Descripción', 'Método Pago', 'Total']],
+                body: tableData,
+                foot: [['', '', 'TOTAL DEL MES', `$${totalMonth.toLocaleString()}`]],
+                headStyles: { fillColor: [16, 185, 129] }, // Green color from theme
+                footStyles: { fillColor: [241, 245, 249], textColor: [0, 0, 0], fontStyle: 'bold' },
+                theme: 'striped'
+            });
+
+            doc.save(`Ventas_${currentMonthName}_${year}.pdf`);
+
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            alert("Error al generar el PDF. Intente nuevamente.");
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
         }
     }
 };
